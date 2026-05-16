@@ -359,14 +359,13 @@ export async function handleAdminRoutes(path, method, request, env, corsHeaders,
 
   // 站点状态查询（公开）
   if (path === '/api/sites/status' && method === 'GET') {
+    const user = await authenticateAdmin(request, env);
+    if (!user) return createErrorResponse('Unauthorized', '请先登录', 401, corsHeaders);
     try {
-      const user = await authenticateAdmin(request, env).catch(() => null);
-      const isAdmin = user !== null;
 
       const { results } = await env.DB.prepare(`
         SELECT id, url, name, last_checked, last_status, last_status_code, last_response_time_ms, is_public
         FROM monitored_sites
-        ${isAdmin ? '' : 'WHERE is_public = 1'}
         ORDER BY sort_order ASC NULLS LAST, name ASC
       `).all();
 

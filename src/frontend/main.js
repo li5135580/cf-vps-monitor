@@ -361,12 +361,29 @@ async function adminLink() {
   try{const d=await api('/api/auth/status');if(d.authenticated){l.textContent=lang==='zh'?'管理后台':'Admin';l.href='/admin.html';}else{l.textContent=lang==='zh'?'管理员登录':'Login';l.href='/login.html';localStorage.removeItem('auth_token');}}catch(e){l.textContent=lang==='zh'?'管理员登录':'Login';}
 }
 
+// ===== Auth Gate =====
+async function checkAuth() {
+  const token = localStorage.getItem('auth_token');
+  if (!token) return false;
+  try {
+    const d = await api('/api/auth/status');
+    return d.authenticated;
+  } catch(e) { return false; }
+}
+
 // ===== Init =====
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded', async ()=>{
   if(!$('#serverTableBody')){ themeInit(); return; }
   themeInit();
   applyI18n();
   $('#langToggle').addEventListener('click', toggleLang);
+
+  // 登录门禁：未登录跳转登录页
+  const authed = await checkAuth();
+  if (!authed) {
+    window.location.href = '/login.html';
+    return;
+  }
 
   switchView(currentView);
   loadServers(); loadSites();

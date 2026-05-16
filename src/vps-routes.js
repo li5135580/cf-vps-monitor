@@ -76,20 +76,19 @@ export async function handleVpsRoutes(path, method, request, env, corsHeaders, c
     }
   }
 
-  // 批量VPS状态查询（JOIN查询优化）
+  // 批量VPS状态查询（需要登录）
   if (path === '/api/status/batch' && method === 'GET') {
     try {
       const user = await authenticateRequestOptional(request, env);
-      const isAdmin = user !== null;
+      if (!user) return createErrorResponse('Unauthorized', '请先登录', 401, corsHeaders);
 
       const { results } = await env.DB.prepare(`
         SELECT s.id, s.name, s.description,
                m.timestamp, m.cpu, m.memory, m.disk, m.network, m.uptime
         FROM servers s
         LEFT JOIN metrics m ON s.id = m.server_id
-        WHERE s.is_public = 1 OR ? = 1
         ORDER BY s.sort_order ASC NULLS LAST, s.name ASC
-      `).bind(isAdmin ? 1 : 0).all();
+      `).all();
 
       const servers = (results || []).map(row => {
         const server = { id: row.id, name: row.name, description: row.description };
