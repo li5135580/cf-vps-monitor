@@ -6,14 +6,12 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "vps-monitor-db"
-database_id = "your-database-id-here"
+database_id = "${D1_DATABASE_ID}"
 
 [[observability]]
 enabled = true
 
 [vars]
-USERNAME = "admin"
-PASSWORD = "changeme123"
-
-[env.production]
-vars = { JWT_SECRET = "replace-with-random-secret" }
+USERNAME = "${ADMIN_USERNAME:-admin}"
+PASSWORD = "${ADMIN_PASSWORD:-changeme123}"
+JWT_SECRET = "${JWT_SECRET}"
