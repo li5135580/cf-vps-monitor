@@ -8,8 +8,9 @@ binding = "DB"
 database_name = "vps-monitor-db"
 database_id = "${D1_DATABASE_ID}"
 
-[[observability]]
+[observability]
 enabled = true
+logs = { enabled = true }
 
 [vars]
 USERNAME = "${ADMIN_USERNAME:-admin}"
