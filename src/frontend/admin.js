@@ -165,11 +165,11 @@ window.showServerForm = function() {
   ov.innerHTML = `<div class="modal-panel">
     <h2>> add_server</h2>
     <form id="serverForm" onsubmit="return saveServer(event)">
-      <div class="form-group"><label class="form-label">${t('server_id')}</label><input class="form-input" id="srvId" required></div>
-      <div class="form-group"><label class="form-label">${t('name')}</label><input class="form-input" id="srvName" required></div>
-      <div class="form-group"><label class="form-label">${t('description')}</label><input class="form-input" id="srvDesc"></div>
-      <div class="form-group"><label class="form-label">${t('api_key')}</label><input class="form-input" id="srvKey" required></div>
+      <div class="form-group"><label class="form-label">${t('server_id')}</label><input class="form-input" id="srvId" required placeholder="my-vps-01"></div>
+      <div class="form-group"><label class="form-label">${t('name')}</label><input class="form-input" id="srvName" required placeholder="${lang==='zh'?'我的服务器':'My Server'}"></div>
+      <div class="form-group"><label class="form-label">${t('description')}</label><input class="form-input" id="srvDesc" placeholder="${lang==='zh'?'可选描述':'Optional description'}"></div>
       <div class="checkbox-wrap"><input type="checkbox" id="srvPublic" checked><span style="font-family:var(--font-mono);font-size:0.75rem">Public</span></div>
+      <div style="font-size:0.65rem;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:0.5rem">🔑 API密钥将自动生成随机强密钥</div>
       <div class="d-flex gap-2" style="margin-top:1rem">
         <button type="submit" class="btn-primary w-full">${t('save')}</button>
         <button type="button" class="btn-ghost w-full" onclick="closeModal()">${t('cancel')}</button>
@@ -185,12 +185,14 @@ window.closeModal = function() { const m = document.getElementById('modalOverlay
 window.saveServer = async function(e) {
   e.preventDefault();
   const id = $('#srvId').value.trim(), name = $('#srvName').value.trim();
-  const desc = $('#srvDesc').value.trim(), key = $('#srvKey').value.trim();
+  const desc = $('#srvDesc').value.trim();
   const pub = $('#srvPublic').checked;
-  if (!id||!name||!key) { toast('danger', t('failed')); return false; }
+  if (!id||!name) { toast('danger', t('failed')); return false; }
   try {
-    await api('/api/admin/servers', { method:'POST', body:JSON.stringify({id,name,description:desc,api_key:key,is_public:pub}) });
-    closeModal(); toast('success', t('added')); loadTab('servers');
+    const result = await api('/api/admin/servers', { method:'POST', body:JSON.stringify({id,name,description:desc,is_public:pub}) });
+    closeModal();
+    toast('success', `${t('added')}: ${name}<br><code style="font-size:0.7rem;word-break:break-all">API Key: ${result.api_key}</code>`, 8000);
+    loadTab('servers');
   } catch(e) { toast('danger', t('failed')+': '+e.message); }
   return false;
 };
@@ -201,11 +203,14 @@ window.deleteServer = async function(id) {
   catch(e) { toast('danger', t('failed')+': '+e.message); }
 };
 
-window.copyInstall = function(sid, sname) {
-  const key = prompt('API Key for '+sname+':');
-  if (!key) return;
-  const cmd = 'curl -sSL '+window.location.origin+'/install.sh | bash -s -- -k '+key+' -s '+sid;
-  navigator.clipboard.writeText(cmd).then(()=>toast('success',t('installed'))).catch(()=>toast('danger',t('copy_failed')));
+window.copyInstall = async function(sid, sname) {
+  try {
+    const data = await api('/api/admin/servers');
+    const server = (data.servers||[]).find(s => s.id === sid);
+    if (!server?.api_key) { toast('danger', t('failed')+': key not found'); return; }
+    const cmd = 'curl -sSL '+window.location.origin+'/install.sh | bash -s -- -k '+server.api_key+' -s '+sid;
+    navigator.clipboard.writeText(cmd).then(()=>toast('success',t('installed'))).catch(()=>toast('danger',t('copy_failed')));
+  } catch(e) { toast('danger', t('failed')+': '+e.message); }
 };
 
 // ===== Sites =====

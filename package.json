@@ -1,6 +1,6 @@
 {
   "name": "cf-vps-monitor",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "VPS监控面板 - Cloudflare Worker",
   "type": "module",
   "scripts": {

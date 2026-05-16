@@ -118,20 +118,28 @@ export async function handleAdminRoutes(path, method, request, env, corsHeaders,
     const user = await authenticateAdmin(request, env);
     if (!user) return createErrorResponse('Unauthorized', '需要管理员权限', 401, corsHeaders);
     try {
-      const servers = await configCache.getServerList(env.DB, true);
+      // 管理员获取服务器列表（含api_key用于安装脚本复制）
+      const { results } = await env.DB.prepare(
+        'SELECT id, name, description, api_key, is_public, sort_order FROM servers ORDER BY sort_order ASC NULLS LAST, name ASC'
+      ).all();
+      const servers = results || [];
       return createApiResponse({ servers }, 200, corsHeaders);
     } catch (error) {
       return createErrorResponse('Server list error', error.message, 500, corsHeaders);
     }
   }
 
-  // 添加服务器
+  // 添加服务器（API密钥自动生成随机强密钥）
   if ((path === '/api/admin/servers' || path === '/api/servers') && method === 'POST') {
     const user = await authenticateAdmin(request, env);
     if (!user) return createErrorResponse('Unauthorized', '需要管理员权限', 401, corsHeaders);
     try {
-      const { id, name, description, api_key, is_public } = await request.json();
-      if (!id || !name || !api_key) return createErrorResponse('Invalid input', '服务器ID、名称和API密钥为必填项', 400, corsHeaders);
+      const { id, name, description, is_public } = await request.json();
+      if (!id || !name) return createErrorResponse('Invalid input', '服务器ID和名称为必填项', 400, corsHeaders);
+
+      // 自动生成随机32位强密钥
+      const randomBytes = crypto.getRandomValues(new Uint8Array(24));
+      const api_key = 'sk-' + Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
       await env.DB.prepare(
         'INSERT INTO servers (id, name, description, api_key, is_public, created_at) VALUES (?, ?, ?, ?, ?, ?)'
@@ -139,7 +147,7 @@ export async function handleAdminRoutes(path, method, request, env, corsHeaders,
 
       configCache.clearKey('servers_admin');
       configCache.clearKey('servers_public');
-      return createSuccessResponse({ id }, corsHeaders);
+      return createSuccessResponse({ id, api_key }, corsHeaders);
     } catch (error) {
       if (error.message?.includes('UNIQUE')) return createErrorResponse('Duplicate', '服务器ID已存在', 409, corsHeaders);
       return createErrorResponse('Create server failed', error.message, 500, corsHeaders);
