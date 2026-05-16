@@ -1,4 +1,4 @@
-// frontend/routes.js - 前端路由 + 内联HTML模板
+// frontend/routes.js - 前端路由 + 内联HTML模板（默认中文，可选英文）
 
 let indexHtml = null, loginHtml = null, adminHtml = null;
 let styleCss = null, mainJs = null, loginJs = null, adminJs = null;
@@ -55,35 +55,38 @@ function getIndexHtml(env) {
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VPS Monitor</title>
+  <title>VPS 监控面板</title>
   <link href="/style.css" rel="stylesheet">
 </head>
 <body>
   <nav class="navbar d-flex align-center justify-between">
     <a href="/" class="nav-brand"><span class="dot"></span>vps.monitor<span class="cursor"></span></a>
     <div class="d-flex align-center gap-2">
-      <button class="btn-ghost" id="themeToggler" title="Toggle theme">◐</button>
-      <a class="btn-ghost" id="adminAuthLink" href="/login.html">admin</a>
+      <button class="btn-ghost" id="langToggle" title="Switch Language">EN</button>
+      <button class="btn-ghost" id="themeToggler" title="切换主题">◐</button>
+      <a class="btn-ghost" id="adminAuthLink" href="/login.html">管理员登录</a>
     </div>
   </nav>
 
   <div class="container" style="max-width:1400px;margin:0 auto;padding:1.25rem 1rem;">
     <div class="section-header">
-      <span class="section-title">servers</span>
+      <span class="section-title" data-i18n="servers_title">服务器</span>
       <div class="view-toggle">
-        <button id="btnTableView" class="active" onclick="switchView('table')">📋 table</button>
-        <button id="btnGridView" onclick="switchView('grid')">⊞ grid</button>
+        <button id="btnTableView" class="active" onclick="switchView('table')" data-i18n="view_table">📋 表格</button>
+        <button id="btnGridView" onclick="switchView('grid')" data-i18n="view_grid">⊞ 卡片</button>
       </div>
     </div>
 
-    <div id="noServers" style="display:none;text-align:center;padding:2rem;color:var(--text-muted);font-family:var(--font-mono)">
-      no servers configured · <a href="/admin.html" style="color:var(--accent-cyan)">add one</a>
+    <div id="noServers" style="display:none;text-align:center;padding:2rem;color:var(--text-muted);font-family:var(--font-mono)" data-i18n="no_servers">
+      暂无服务器 · <a href="/admin.html" style="color:var(--accent-cyan)">添加服务器</a>
     </div>
 
     <div id="tableView">
       <div style="overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>name</th><th>status</th><th>cpu</th><th>memory</th><th>disk</th><th>network</th><th>uptime</th><th>updated</th></tr></thead>
+          <thead><tr>
+            <th data-i18n="th_name">名称</th><th data-i18n="th_status">状态</th><th>CPU</th><th data-i18n="th_memory">内存</th><th data-i18n="th_disk">硬盘</th><th data-i18n="th_network">网络</th><th data-i18n="th_uptime">运行时长</th><th data-i18n="th_updated">更新</th>
+          </tr></thead>
           <tbody id="serverTableBody"></tbody>
         </table>
       </div>
@@ -92,10 +95,12 @@ function getIndexHtml(env) {
     <div id="gridView" style="display:none"><div id="serverGrid" class="server-grid"></div></div>
     <div id="mobileView" style="display:none"><div id="mobileServerContainer"></div></div>
 
-    <div class="section-header mt-4"><span class="section-title">sites</span></div>
+    <div class="section-header mt-4"><span class="section-title" data-i18n="sites_title">网站监控</span></div>
     <div id="tableView-sites" style="overflow-x:auto">
       <table class="data-table">
-        <thead><tr><th>site</th><th>url</th><th>status</th><th>response</th><th>24h history</th></tr></thead>
+        <thead><tr>
+          <th data-i18n="th_site">网站</th><th>URL</th><th data-i18n="th_status">状态</th><th data-i18n="th_response">响应时间</th><th data-i18n="th_history">24h历史</th>
+        </tr></thead>
         <tbody id="siteTableBody"></tbody>
       </table>
     </div>
@@ -119,19 +124,19 @@ function getLoginHtml(env) {
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login · VPS Monitor</title>
+  <title>管理员登录 · VPS 监控</title>
   <link href="/style.css" rel="stylesheet">
 </head>
 <body class="login-page">
   <div class="login-card">
     <h1>> admin_auth</h1>
     <form id="loginForm" onsubmit="return handleLogin(event)">
-      <div class="form-group"><label class="form-label">username</label><input class="form-input" id="username" required autofocus></div>
-      <div class="form-group"><label class="form-label">password</label><input class="form-input" type="password" id="password" required></div>
+      <div class="form-group"><label class="form-label" data-i18n="username">用户名</label><input class="form-input" id="username" required autofocus></div>
+      <div class="form-group"><label class="form-label" data-i18n="password">密码</label><input class="form-input" type="password" id="password" required></div>
       <div id="loginError" class="alert alert-danger" style="display:none"></div>
-      <button type="submit" class="btn-primary w-full" style="margin-top:0.5rem">authenticate</button>
+      <button type="submit" class="btn-primary w-full" style="margin-top:0.5rem" data-i18n="login_btn">登录</button>
     </form>
-    <div class="text-center" style="margin-top:1.5rem"><a href="/" class="btn-ghost">← back</a></div>
+    <div class="text-center" style="margin-top:1.5rem"><a href="/" class="btn-ghost" data-i18n="back">← 返回</a></div>
   </div>
   <script src="/login.js"></script>
 </body>
@@ -145,26 +150,27 @@ function getAdminHtml(env) {
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin · VPS Monitor</title>
+  <title>管理后台 · VPS 监控</title>
   <link href="/style.css" rel="stylesheet">
 </head>
 <body>
   <nav class="navbar d-flex align-center justify-between">
     <a href="/" class="nav-brand"><span class="dot"></span>vps.admin<span class="cursor"></span></a>
     <div class="d-flex align-center gap-2">
-      <button class="btn-ghost" id="themeToggler">◐</button>
-      <a class="btn-ghost" href="/">dashboard</a>
-      <button class="btn-danger" onclick="logout()">exit</button>
+      <button class="btn-ghost" id="langToggle" title="Switch Language">EN</button>
+      <button class="btn-ghost" id="themeToggler" title="切换主题">◐</button>
+      <a class="btn-ghost" href="/" data-i18n="dashboard">控制台</a>
+      <button class="btn-danger" onclick="logout()" data-i18n="exit">退出</button>
     </div>
   </nav>
 
   <div class="container" style="max-width:1200px;margin:0 auto;padding:1.25rem 1rem;">
     <div class="admin-tabs">
-      <button class="admin-tab active" data-tab="servers">servers</button>
-      <button class="admin-tab" data-tab="sites">sites</button>
-      <button class="admin-tab" data-tab="telegram">telegram</button>
-      <button class="admin-tab" data-tab="background">background</button>
-      <button class="admin-tab" data-tab="settings">settings</button>
+      <button class="admin-tab active" data-tab="servers" data-i18n="tab_servers">服务器</button>
+      <button class="admin-tab" data-tab="sites" data-i18n="tab_sites">网站</button>
+      <button class="admin-tab" data-tab="telegram">Telegram</button>
+      <button class="admin-tab" data-tab="background" data-i18n="tab_background">背景</button>
+      <button class="admin-tab" data-tab="settings" data-i18n="tab_settings">设置</button>
     </div>
     <div id="tabContent"><div class="spinner"></div></div>
   </div>
