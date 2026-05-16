@@ -43,7 +43,7 @@ jobs:
           name: worker
           path: dist
 
-      - name: Deploy to Cloudflare Workers
+      - name: Inject secrets and deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -52,6 +52,10 @@ jobs:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
+          sed -i "s/__D1_DATABASE_ID__/${D1_DATABASE_ID}/g" wrangler.toml
+          sed -i "s/__ADMIN_USERNAME__/${ADMIN_USERNAME}/g" wrangler.toml
+          sed -i "s/__ADMIN_PASSWORD__/${ADMIN_PASSWORD}/g" wrangler.toml
+          sed -i "s/__JWT_SECRET__/${JWT_SECRET}/g" wrangler.toml
           npx wrangler deploy --config wrangler.toml
 
   release:

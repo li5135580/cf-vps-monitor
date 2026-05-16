@@ -6,13 +6,13 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "vps-monitor-db"
-database_id = "${D1_DATABASE_ID}"
+database_id = "__D1_DATABASE_ID__"
 
 [observability]
 enabled = true
 logs = { enabled = true }
 
 [vars]
-USERNAME = "${ADMIN_USERNAME:-admin}"
-PASSWORD = "${ADMIN_PASSWORD:-changeme123}"
-JWT_SECRET = "${JWT_SECRET}"
+USERNAME = "__ADMIN_USERNAME__"
+PASSWORD = "__ADMIN_PASSWORD__"
+JWT_SECRET = "__JWT_SECRET__"
