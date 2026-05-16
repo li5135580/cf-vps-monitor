@@ -1,56 +1,10 @@
 // vps-routes.js - VPS数据上报、状态查询、通知API
 
-import { validateAndFixVpsData } from './utils.js';
+import { validateAndFixVpsData, sharedBatchProcessor } from './utils.js';
 
-const vpsBatchProcessor = new VpsBatchProcessor();
-
-class VpsBatchProcessor {
-  constructor() {
-    this.batchBuffer = [];
-    this.lastBatch = Math.floor(Date.now() / 1000);
-    this.maxBatchSize = 100;
-  }
-
-  addReport(serverId, reportData, batchInterval) {
-    this.batchBuffer.push({
-      serverId,
-      timestamp: reportData.timestamp,
-      cpu: JSON.stringify(reportData.cpu),
-      memory: JSON.stringify(reportData.memory),
-      disk: JSON.stringify(reportData.disk),
-      network: JSON.stringify(reportData.network),
-      uptime: reportData.uptime
-    });
-    const now = Math.floor(Date.now() / 1000);
-    return (now - this.lastBatch >= batchInterval || this.batchBuffer.length >= this.maxBatchSize);
-  }
-
-  getBatchData() {
-    const data = [...this.batchBuffer];
-    this.batchBuffer = [];
-    this.lastBatch = Math.floor(Date.now() / 1000);
-    return data;
-  }
-
-  shouldFlush(batchInterval) {
-    const now = Math.floor(Date.now() / 1000);
-    return this.batchBuffer.length > 0 && (now - this.lastBatch >= batchInterval);
-  }
-}
-
-async function flushVpsBatchData(env) {
-  const batchData = vpsBatchProcessor.getBatchData();
-  if (batchData.length === 0) return;
-  try {
-    const statements = batchData.map(report =>
-      env.DB.prepare(`INSERT OR REPLACE INTO metrics (server_id, timestamp, cpu, memory, disk, network, uptime) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-        .bind(report.serverId, report.timestamp, report.cpu, report.memory, report.disk, report.network, report.uptime)
-    );
-    await env.DB.batch(statements);
-  } catch (error) {
-    console.error('批量写入VPS数据失败:', error);
-    vpsBatchProcessor.batchBuffer.unshift(...batchData);
-  }
+async function flushLocalBatch(env) {
+  const { flushLocalBatch } = await import('./db.js');
+  return flushLocalBatch(sharedBatchProcessor, env);
 }
 
 export async function handleVpsRoutes(path, method, request, env, corsHeaders, ctx) {
@@ -109,10 +63,10 @@ export async function handleVpsRoutes(path, method, request, env, corsHeaders, c
 
       reportData = validationResult.data;
       const currentInterval = await getVpsReportInterval(env);
-      const shouldFlush = vpsBatchProcessor.addReport(serverId, reportData, currentInterval);
+      const shouldFlush = sharedBatchProcessor.addReport(serverId, reportData, currentInterval);
 
-      if (shouldFlush || vpsBatchProcessor.shouldFlush(currentInterval)) {
-        ctx.waitUntil(flushVpsBatchData(env));
+      if (shouldFlush || sharedBatchProcessor.shouldFlush(currentInterval)) {
+        ctx.waitUntil(flushLocalBatch(env));
       }
 
       return createSuccessResponse({ interval: currentInterval }, corsHeaders);

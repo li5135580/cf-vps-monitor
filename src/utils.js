@@ -210,6 +210,9 @@ export class VpsBatchProcessor {
   }
 }
 
+// 全局单例批量处理器
+export const sharedBatchProcessor = new VpsBatchProcessor();
+
 // HTTP URL验证
 export function isValidHttpUrl(string) {
   try {

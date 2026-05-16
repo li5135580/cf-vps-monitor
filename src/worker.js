@@ -1,7 +1,7 @@
 // worker.js - Cloudflare Worker 主入口
 
 import { ensureTablesExist, scheduleVpsBatchFlush } from './db.js';
-import { VpsBatchProcessor, getVpsReportInterval } from './utils.js';
+import { sharedBatchProcessor, getVpsReportInterval } from './utils.js';
 import { getSecureCorsHeaders, checkRateLimit } from './auth.js';
 import { getClientIP, createErrorResponse, createSuccessResponse } from './utils.js';
 import { handleAuthRoutes } from './admin-routes.js';
@@ -10,7 +10,7 @@ import { handleAdminRoutes } from './admin-routes.js';
 import { scheduledEventHandler } from './monitor.js';
 
 let dbInitialized = false;
-const vpsBatchProcessor = new VpsBatchProcessor();
+const vpsBatchProcessor = sharedBatchProcessor;
 
 async function handleApiRequest(request, env, ctx) {
   const url = new URL(request.url);
