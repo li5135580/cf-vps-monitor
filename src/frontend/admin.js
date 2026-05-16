@@ -153,8 +153,8 @@ async function serversTab(ct) {
       <td><span class="status-badge ${s.is_public?'online':'unknown'}">${s.is_public?t('public'):t('hidden')}</span></td>
       <td>${s.sort_order??'—'}</td>
       <td>
-        <button class="btn-ghost" onclick="copyInstall('${s.id}','${s.name}')">📋</button>
-        <button class="btn-ghost" onclick="deleteServer('${s.id}')">🗑</button>
+        <button class="btn-primary" onclick="copyInstall('${s.id}','${s.name}')" style="font-size:0.7rem;padding:0.3rem 0.7rem">📋 ${lang==='zh'?'复制安装':'Copy'}</button>
+        <button class="btn-danger" onclick="deleteServer('${s.id}')" style="font-size:0.7rem;padding:0.3rem 0.7rem">🗑</button>
       </td>
     </tr>`).join('')}</tbody>
   </table></div>`;
