@@ -1,288 +1,264 @@
-// admin.js - 管理后台逻辑
+// admin.js — no-dependency admin panel
 
 let authToken = localStorage.getItem('auth_token');
+const $ = (s, p) => (p || document).querySelector(s);
 
-function getHeaders() {
+function headers() {
   const h = { 'Content-Type': 'application/json' };
   if (authToken) h['Authorization'] = 'Bearer ' + authToken;
   return h;
 }
 
 async function api(url, opts = {}) {
-  const resp = await fetch(url, { headers: getHeaders(), ...opts });
-  if (resp.status === 401) { localStorage.removeItem('auth_token'); window.location.href = '/login.html'; throw new Error('Unauthorized'); }
-  if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err.message || 'Request failed'); }
-  return resp.json();
+  const r = await fetch(url, { headers: headers(), ...opts });
+  if (r.status === 401) { localStorage.removeItem('auth_token'); window.location.href = '/login.html'; throw new Error('Unauthorized'); }
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || 'Error ' + r.status); }
+  return r.json();
 }
 
-function showToast(type, msg) {
-  let c = document.querySelector('.toast-container');
-  if (!c) { c = document.createElement('div'); c.className = 'toast-container'; document.body.appendChild(c); }
+function toast(type, msg) {
+  const c = $('#toastContainer');
   const el = document.createElement('div');
-  el.className = 'toast-item alert ' + ({ success: 'alert-success', danger: 'alert-danger', warning: 'alert-warning' }[type] || 'alert-info');
-  el.textContent = msg;
+  el.className = 'toast-item ' + type; el.textContent = msg;
   c.appendChild(el);
-  setTimeout(() => { el.remove(); if (c.children.length === 0) c.remove(); }, 3000);
+  setTimeout(() => el.remove(), 3000);
 }
 
-window.logout = function() {
-  localStorage.removeItem('auth_token');
-  window.location.href = '/';
-};
+window.logout = function() { localStorage.removeItem('auth_token'); window.location.href = '/'; };
 
-// ========== 主题 ==========
+// ===== Theme =====
 function initTheme() {
-  const toggler = document.getElementById('themeToggler');
-  if (!toggler) return;
-  const stored = localStorage.getItem('vps-monitor-theme') || 'light';
-  applyTheme(stored);
-  toggler.addEventListener('click', () => {
-    const next = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
-    applyTheme(next);
-    localStorage.setItem('vps-monitor-theme', next);
+  const t = localStorage.getItem('vps-theme') || 'dark';
+  applyTheme(t);
+  $('#themeToggler').addEventListener('click', () => {
+    const n = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    applyTheme(n); localStorage.setItem('vps-theme', n);
   });
 }
-function applyTheme(theme) {
-  document.documentElement.setAttribute('data-bs-theme', theme);
-  const icon = document.querySelector('#themeToggler i');
-  if (icon) icon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
-}
-
-// ========== 标签切换 ==========
-function initTabs() {
-  document.querySelectorAll('#adminTabs [data-tab]').forEach(btn => {
-    btn.addEventListener('click', function() {
-      document.querySelectorAll('#adminTabs [data-tab]').forEach(b => b.classList.remove('active'));
-      this.classList.add('active');
-      loadTab(this.dataset.tab);
-    });
-  });
-}
-
-async function loadTab(tab) {
-  const ct = document.getElementById('tabContent');
-  switch (tab) {
-    case 'servers': await renderServersTab(ct); break;
-    case 'sites': await renderSitesTab(ct); break;
-    case 'telegram': await renderTelegramTab(ct); break;
-    case 'background': await renderBackgroundTab(ct); break;
-    case 'settings': await renderSettingsTab(ct); break;
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  const r = document.documentElement.style;
+  if (t === 'light') {
+    r.setProperty('--bg-root','#f4f6f9'); r.setProperty('--bg-surface','#ffffff');
+    r.setProperty('--bg-card','rgba(255,255,255,0.9)'); r.setProperty('--bg-card-hover','rgba(255,255,255,1)');
+    r.setProperty('--text-primary','#1a2332'); r.setProperty('--text-secondary','#5a6a7e'); r.setProperty('--text-muted','#8a9ab0');
+    r.setProperty('--border-subtle','rgba(0,0,0,0.06)'); r.setProperty('--border-card','rgba(0,0,0,0.08)');
+  } else {
+    r.setProperty('--bg-root','#080c12'); r.setProperty('--bg-surface','#0f1724');
+    r.setProperty('--bg-card','rgba(18, 25, 40, 0.85)'); r.setProperty('--bg-card-hover','rgba(24, 33, 52, 0.95)');
+    r.setProperty('--text-primary','#dce3ed'); r.setProperty('--text-secondary','#798aa2'); r.setProperty('--text-muted','#4b5b72');
+    r.setProperty('--border-subtle','rgba(255,255,255,0.06)'); r.setProperty('--border-card','rgba(255,255,255,0.08)');
   }
 }
 
-// ========== 服务器管理 ==========
-async function renderServersTab(ct) {
-  ct.innerHTML = `<div class="text-center py-4"><div class="spinner-border"></div></div>`;
-  const data = await api('/api/admin/servers');
-  const servers = data.servers || [];
-  ct.innerHTML = `
-    <div class="d-flex justify-content-between mb-3">
-      <h6>服务器列表 (${servers.length})</h6>
-      <button class="btn btn-sm btn-primary" onclick="showServerForm()"><i class="bi bi-plus-lg"></i> 添加服务器</button>
-    </div>
-    <div class="table-responsive">
-      <table class="table table-hover table-sm">
-        <thead><tr><th>名称</th><th>ID</th><th>公开</th><th>排序</th><th>操作</th></tr></thead>
-        <tbody>${servers.map(s => `<tr>
-          <td>${s.name}</td><td><code>${s.id}</code></td>
-          <td><span class="badge ${s.is_public ? 'bg-success' : 'bg-secondary'}">${s.is_public ? '公开' : '隐藏'}</span></td>
-          <td>${s.sort_order ?? '-'}</td>
-          <td>
-            <button class="btn btn-sm btn-outline-secondary" onclick="copyInstallCmd('${s.id}','${s.name}')"><i class="bi bi-clipboard"></i></button>
-            <button class="btn btn-sm btn-outline-danger" onclick="deleteServer('${s.id}')"><i class="bi bi-trash"></i></button>
-          </td>
-        </tr>`).join('')}</tbody>
-      </table>
-    </div>
-    <div id="serverFormModal" class="modal fade"><div class="modal-dialog"><div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">添加/编辑服务器</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <form id="serverForm" onsubmit="return saveServer(event)">
-          <div class="mb-2"><label class="form-label">服务器ID</label><input class="form-control" id="srvId" required></div>
-          <div class="mb-2"><label class="form-label">名称</label><input class="form-control" id="srvName" required></div>
-          <div class="mb-2"><label class="form-label">描述</label><input class="form-control" id="srvDesc"></div>
-          <div class="mb-2"><label class="form-label">API密钥</label><input class="form-control" id="srvKey" required></div>
-          <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="srvPublic" checked><label class="form-check-label">公开</label></div>
-          <button type="submit" class="btn btn-primary w-100">保存</button>
-        </form>
-      </div>
-    </div></div></div>`;
+// ===== Tabs =====
+function initTabs() {
+  $$('[data-tab]').forEach(b => b.addEventListener('click', function() {
+    $$('[data-tab]').forEach(x => x.classList.remove('active'));
+    this.classList.add('active');
+    loadTab(this.dataset.tab);
+  }));
+}
+function $$(s,p) { return (p||document).querySelectorAll(s); }
+
+async function loadTab(tab) {
+  const ct = $('#tabContent');
+  switch(tab) {
+    case 'servers': await serversTab(ct); break;
+    case 'sites': await sitesTab(ct); break;
+    case 'telegram': await telegramTab(ct); break;
+    case 'background': await backgroundTab(ct); break;
+    case 'settings': await settingsTab(ct); break;
+  }
+}
+
+// ===== Servers =====
+async function serversTab(ct) {
+  ct.innerHTML = '<div class="spinner"></div>';
+  const d = await api('/api/admin/servers');
+  const servers = d.servers || [];
+  ct.innerHTML = `<div class="d-flex align-center justify-between mb-3">
+    <span style="font-family:var(--font-mono);font-size:0.85rem">${servers.length} servers</span>
+    <button class="btn-primary" onclick="showServerForm()">+ add</button>
+  </div>
+  <div style="overflow-x:auto"><table class="data-table">
+    <thead><tr><th>name</th><th>id</th><th>public</th><th>sort</th><th>actions</th></tr></thead>
+    <tbody>${servers.map(s=>`<tr>
+      <td>${s.name}</td><td><code style="font-size:0.7rem;color:var(--text-muted)">${s.id}</code></td>
+      <td><span class="status-badge ${s.is_public?'online':'unknown'}">${s.is_public?'public':'hidden'}</span></td>
+      <td>${s.sort_order??'—'}</td>
+      <td>
+        <button class="btn-ghost" onclick="copyInstall('${s.id}','${s.name}')">📋</button>
+        <button class="btn-ghost" onclick="deleteServer('${s.id}')">🗑</button>
+      </td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
 }
 
 window.showServerForm = function() {
-  new bootstrap.Modal(document.getElementById('serverFormModal')).show();
+  const ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'modalOverlay';
+  ov.innerHTML = `<div class="modal-panel">
+    <h2>> add_server</h2>
+    <form id="serverForm" onsubmit="return saveServer(event)">
+      <div class="form-group"><label class="form-label">Server ID</label><input class="form-input" id="srvId" required></div>
+      <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="srvName" required></div>
+      <div class="form-group"><label class="form-label">Description</label><input class="form-input" id="srvDesc"></div>
+      <div class="form-group"><label class="form-label">API Key</label><input class="form-input" id="srvKey" required></div>
+      <div class="checkbox-wrap"><input type="checkbox" id="srvPublic" checked><span style="font-family:var(--font-mono);font-size:0.75rem">Public</span></div>
+      <div class="d-flex gap-2" style="margin-top:1rem">
+        <button type="submit" class="btn-primary w-full">save</button>
+        <button type="button" class="btn-ghost w-full" onclick="closeModal()">cancel</button>
+      </div>
+    </form>
+  </div>`;
+  ov.addEventListener('click', function(e) { if (e.target === ov) closeModal(); });
+  document.body.appendChild(ov);
 };
+
+window.closeModal = function() { const m = document.getElementById('modalOverlay'); if (m) m.remove(); };
 
 window.saveServer = async function(e) {
   e.preventDefault();
-  const id = document.getElementById('srvId').value.trim();
-  const name = document.getElementById('srvName').value.trim();
-  const description = document.getElementById('srvDesc').value.trim();
-  const api_key = document.getElementById('srvKey').value.trim();
-  const is_public = document.getElementById('srvPublic').checked;
-  if (!id || !name || !api_key) { showToast('danger', '必填项不能为空'); return false; }
+  const id = $('#srvId').value.trim(), name = $('#srvName').value.trim();
+  const desc = $('#srvDesc').value.trim(), key = $('#srvKey').value.trim();
+  const pub = $('#srvPublic').checked;
+  if (!id||!name||!key) { toast('danger','All fields required'); return false; }
   try {
-    await api('/api/admin/servers', { method: 'POST', body: JSON.stringify({ id, name, description, api_key, is_public }) });
-    bootstrap.Modal.getInstance(document.getElementById('serverFormModal')).hide();
-    showToast('success', '服务器已添加');
-    loadTab('servers');
-  } catch (e) { showToast('danger', '添加失败: ' + e.message); }
+    await api('/api/admin/servers', { method:'POST', body:JSON.stringify({id,name,description:desc,api_key:key,is_public:pub}) });
+    closeModal(); toast('success','Server added'); loadTab('servers');
+  } catch(e) { toast('danger','Failed: '+e.message); }
   return false;
 };
 
 window.deleteServer = async function(id) {
-  if (!confirm('确定删除服务器 ' + id + '？')) return;
-  try { await api('/api/admin/servers/' + id, { method: 'DELETE' }); showToast('success', '已删除'); loadTab('servers'); }
-  catch (e) { showToast('danger', '删除失败: ' + e.message); }
+  if (!confirm('Delete server '+id+'?')) return;
+  try { await api('/api/admin/servers/'+id, { method:'DELETE' }); toast('success','Deleted'); loadTab('servers'); }
+  catch(e) { toast('danger','Failed: '+e.message); }
 };
 
-window.copyInstallCmd = function(sid, sname) {
-  const apiKey = prompt('请输入此服务器的API密钥:');
-  if (!apiKey) return;
-  const cmd = `curl -sSL ${window.location.origin}/install.sh | bash -s -- -k ${apiKey} -s ${sid}`;
-  navigator.clipboard.writeText(cmd).then(() => showToast('success', '安装命令已复制')).catch(() => showToast('danger', '复制失败'));
+window.copyInstall = function(sid, sname) {
+  const key = prompt('API Key for '+sname+':');
+  if (!key) return;
+  const cmd = 'curl -sSL '+window.location.origin+'/install.sh | bash -s -- -k '+key+' -s '+sid;
+  navigator.clipboard.writeText(cmd).then(()=>toast('success','Copied')).catch(()=>toast('danger','Copy failed'));
 };
 
-// ========== 站点管理 ==========
-async function renderSitesTab(ct) {
-  const data = await api('/api/admin/sites');
-  const sites = data.sites || [];
-  ct.innerHTML = `
-    <div class="d-flex justify-content-between mb-3"><h6>站点列表 (${sites.length})</h6><button class="btn btn-sm btn-primary" onclick="showSiteForm()"><i class="bi bi-plus-lg"></i> 添加站点</button></div>
-    <div class="table-responsive"><table class="table table-hover table-sm">
-      <thead><tr><th>名称</th><th>URL</th><th>状态</th><th>公开</th><th>操作</th></tr></thead>
-      <tbody>${sites.map(s => `<tr>
-        <td>${s.name || s.id}</td><td><small>${s.url}</small></td>
-        <td><span class="badge ${s.last_status === 'UP' ? 'bg-success' : 'bg-secondary'}">${s.last_status || '未知'}</span></td>
-        <td><span class="badge ${s.is_public ? 'bg-success' : 'bg-secondary'}">${s.is_public ? '公开' : '隐藏'}</span></td>
-        <td><button class="btn btn-sm btn-outline-danger" onclick="deleteSite('${s.id}')"><i class="bi bi-trash"></i></button></td>
-      </tr>`).join('')}</tbody>
-    </table></div>
-    <div id="siteFormModal" class="modal fade"><div class="modal-dialog"><div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">添加站点</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <form id="siteForm" onsubmit="return saveSite(event)">
-          <div class="mb-2"><label class="form-label">站点ID</label><input class="form-control" id="siteId" required></div>
-          <div class="mb-2"><label class="form-label">URL</label><input class="form-control" type="url" id="siteUrl" required></div>
-          <div class="mb-2"><label class="form-label">名称</label><input class="form-control" id="siteName" required></div>
-          <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="sitePublic" checked><label class="form-check-label">公开</label></div>
-          <button type="submit" class="btn btn-primary w-100">保存</button>
-        </form>
-      </div>
-    </div></div></div>`;
+// ===== Sites =====
+async function sitesTab(ct) {
+  const d = await api('/api/admin/sites');
+  const sites = d.sites || [];
+  ct.innerHTML = `<div class="d-flex align-center justify-between mb-3">
+    <span style="font-family:var(--font-mono);font-size:0.85rem">${sites.length} sites</span>
+    <button class="btn-primary" onclick="showSiteForm()">+ add</button>
+  </div>
+  <table class="data-table"><thead><tr><th>name</th><th>url</th><th>status</th><th>public</th><th>actions</th></tr></thead>
+    <tbody>${sites.map(s=>`<tr><td>${s.name||s.id}</td><td style="font-size:0.7rem;color:var(--text-muted)">${s.url}</td><td><span class="status-badge ${s.last_status==='UP'?'online':'unknown'}">${s.last_status||'—'}</span></td><td><span class="status-badge ${s.is_public?'online':'unknown'}">${s.is_public?'public':'hidden'}</span></td><td><button class="btn-ghost" onclick="deleteSite('${s.id}')">🗑</button></td></tr>`).join('')}</tbody></table>`;
 }
 
-window.showSiteForm = function() { new bootstrap.Modal(document.getElementById('siteFormModal')).show(); };
+window.showSiteForm = function() {
+  const ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'modalOverlay';
+  ov.innerHTML = `<div class="modal-panel">
+    <h2>> add_site</h2>
+    <form id="siteForm" onsubmit="return saveSite(event)">
+      <div class="form-group"><label class="form-label">Site ID</label><input class="form-input" id="siteId" required></div>
+      <div class="form-group"><label class="form-label">URL</label><input class="form-input" type="url" id="siteUrl" required></div>
+      <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="siteName" required></div>
+      <div class="checkbox-wrap"><input type="checkbox" id="sitePublic" checked><span style="font-family:var(--font-mono);font-size:0.75rem">Public</span></div>
+      <div class="d-flex gap-2" style="margin-top:1rem">
+        <button type="submit" class="btn-primary w-full">save</button>
+        <button type="button" class="btn-ghost w-full" onclick="closeModal()">cancel</button>
+      </div>
+    </form>
+  </div>`;
+  ov.addEventListener('click', function(e) { if (e.target === ov) closeModal(); });
+  document.body.appendChild(ov);
+};
+
 window.saveSite = async function(e) {
   e.preventDefault();
-  const id = document.getElementById('siteId').value.trim();
-  const url = document.getElementById('siteUrl').value.trim();
-  const name = document.getElementById('siteName').value.trim();
-  try { await api('/api/admin/sites', { method: 'POST', body: JSON.stringify({ id, url, name, is_public: true }) }); bootstrap.Modal.getInstance(document.getElementById('siteFormModal')).hide(); showToast('success', '站点已添加'); loadTab('sites'); }
-  catch (e) { showToast('danger', '添加失败: ' + e.message); }
+  const id=$('#siteId').value.trim(), url=$('#siteUrl').value.trim(), name=$('#siteName').value.trim();
+  try{await api('/api/admin/sites',{method:'POST',body:JSON.stringify({id,url,name,is_public:true})});closeModal();toast('success','Site added');loadTab('sites');}
+  catch(e){toast('danger','Failed: '+e.message);}
   return false;
 };
+
 window.deleteSite = async function(id) {
-  if (!confirm('确定删除站点？')) return;
-  try { await api('/api/admin/sites/' + id, { method: 'DELETE' }); showToast('success', '已删除'); loadTab('sites'); }
-  catch (e) { showToast('danger', '删除失败: ' + e.message); }
+  if(!confirm('Delete site?'))return;
+  try{await api('/api/admin/sites/'+id,{method:'DELETE'});toast('success','Deleted');loadTab('sites');}
+  catch(e){toast('danger','Failed: '+e.message);}
 };
 
-// ========== Telegram ==========
-async function renderTelegramTab(ct) {
-  let settings = { bot_token: '', chat_id: '', enable_notifications: 0 };
-  try { settings = await api('/api/admin/telegram-settings'); } catch (e) {}
-  ct.innerHTML = `
-    <h6>Telegram Bot 通知设置</h6>
-    <form onsubmit="return saveTelegram(event)">
-      <div class="mb-3"><label class="form-label">Bot Token</label><input class="form-control" id="tgToken" value="${settings.bot_token || ''}" placeholder="123456:ABC-DEF1234ghikl"></div>
-      <div class="mb-3"><label class="form-label">Chat ID</label><input class="form-control" id="tgChat" value="${settings.chat_id || ''}" placeholder="-100123456789"></div>
-      <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="tgEnable" ${settings.enable_notifications ? 'checked' : ''}><label class="form-check-label">启用通知</label></div>
-      <button type="submit" class="btn btn-primary">保存并测试</button>
-    </form>`;
+// ===== Telegram =====
+async function telegramTab(ct) {
+  let s={bot_token:'',chat_id:'',enable_notifications:0};
+  try{s=await api('/api/admin/telegram-settings');}catch(e){}
+  ct.innerHTML=`<form onsubmit="return saveTg(event)">
+    <div class="form-group"><label class="form-label">Bot Token</label><input class="form-input" id="tgToken" value="${s.bot_token||''}" placeholder="123456:ABC-DEF1234"></div>
+    <div class="form-group"><label class="form-label">Chat ID</label><input class="form-input" id="tgChat" value="${s.chat_id||''}" placeholder="-100123456789"></div>
+    <div class="checkbox-wrap"><input type="checkbox" id="tgEnable" ${s.enable_notifications?'checked':''}><span style="font-family:var(--font-mono);font-size:0.75rem">Enable notifications</span></div>
+    <button type="submit" class="btn-primary">save & test</button>
+  </form>`;
 }
-window.saveTelegram = async function(e) {
+window.saveTg = async function(e) {
   e.preventDefault();
-  const bot_token = document.getElementById('tgToken').value.trim();
-  const chat_id = document.getElementById('tgChat').value.trim();
-  const enable_notifications = document.getElementById('tgEnable').checked;
-  try { await api('/api/admin/telegram-settings', { method: 'POST', body: JSON.stringify({ bot_token, chat_id, enable_notifications }) }); showToast('success', 'Telegram设置已保存'); }
-  catch (e) { showToast('danger', '保存失败: ' + e.message); }
+  try{await api('/api/admin/telegram-settings',{method:'POST',body:JSON.stringify({bot_token:$('#tgToken').value.trim(),chat_id:$('#tgChat').value.trim(),enable_notifications:$('#tgEnable').checked})});toast('success','Saved');}
+  catch(e){toast('danger','Failed: '+e.message);}
   return false;
 };
 
-// ========== 背景设置 ==========
-async function renderBackgroundTab(ct) {
-  let settings = { enabled: false, url: '', opacity: 80 };
-  try { settings = await api('/api/admin/background-settings'); } catch (e) {}
-  ct.innerHTML = `
-    <h6>背景图片设置</h6>
-    <form onsubmit="return saveBackground(event)">
-      <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="bgEnabled" ${settings.enabled ? 'checked' : ''}><label class="form-check-label">启用自定义背景</label></div>
-      <div class="mb-3"><label class="form-label">背景图片URL (https://)</label><input class="form-control" type="url" id="bgUrl" value="${settings.url || ''}"></div>
-      <div class="mb-3"><label class="form-label">页面透明度: <span id="opacVal">${settings.opacity}</span>%</label><input type="range" class="form-range" id="bgOpacity" min="0" max="100" value="${settings.opacity}" oninput="document.getElementById('opacVal').textContent=this.value"></div>
-      <button type="submit" class="btn btn-primary">保存</button>
-    </form>`;
+// ===== Background =====
+async function backgroundTab(ct) {
+  let s={enabled:false,url:'',opacity:80};
+  try{s=await api('/api/admin/background-settings');}catch(e){}
+  ct.innerHTML=`<form onsubmit="return saveBg(event)">
+    <div class="checkbox-wrap"><input type="checkbox" id="bgEnabled" ${s.enabled?'checked':''}><span style="font-family:var(--font-mono);font-size:0.75rem">Custom background</span></div>
+    <div class="form-group"><label class="form-label">Image URL (https://)</label><input class="form-input" id="bgUrl" value="${s.url||''}"></div>
+    <div class="form-group"><label class="form-label">Opacity: <span id="opacVal">${s.opacity}</span>%</label><input type="range" style="width:100%" id="bgOpacity" min="0" max="100" value="${s.opacity}" oninput="$('#opacVal').textContent=this.value"></div>
+    <button type="submit" class="btn-primary">save</button>
+  </form>`;
 }
-window.saveBackground = async function(e) {
+window.saveBg = async function(e) {
   e.preventDefault();
-  const enabled = document.getElementById('bgEnabled').checked;
-  const url = document.getElementById('bgUrl').value.trim();
-  const opacity = parseInt(document.getElementById('bgOpacity').value);
-  try { await api('/api/admin/background-settings', { method: 'POST', body: JSON.stringify({ enabled, url, opacity }) }); showToast('success', '背景设置已保存'); }
-  catch (e) { showToast('danger', '保存失败: ' + e.message); }
+  try{await api('/api/admin/background-settings',{method:'POST',body:JSON.stringify({enabled:$('#bgEnabled').checked,url:$('#bgUrl').value.trim(),opacity:parseInt($('#bgOpacity').value)})});toast('success','Saved');}
+  catch(e){toast('danger','Failed: '+e.message);}
   return false;
 };
 
-// ========== 系统设置 ==========
-async function renderSettingsTab(ct) {
-  let interval = 60;
-  try { const d = await api('/api/admin/settings/vps-report-interval'); interval = d.interval || 60; } catch (e) {}
-  ct.innerHTML = `
-    <h6>系统设置</h6>
-    <form onsubmit="return saveSettings(event)">
-      <div class="mb-3"><label class="form-label">VPS上报间隔 (秒，10-3600)</label><input type="number" class="form-control" id="vpsInterval" value="${interval}" min="10" max="3600"></div>
-      <div class="mb-3"><label class="form-label">修改密码</label><div class="input-group">
-        <input type="password" class="form-control" id="newPassword1" placeholder="新密码" minlength="8">
-        <input type="password" class="form-control" id="newPassword2" placeholder="确认新密码" minlength="8">
-      </div></div>
-      <button type="submit" class="btn btn-primary">保存设置</button>
-    </form>`;
+// ===== Settings =====
+async function settingsTab(ct) {
+  let iv=60;
+  try{const d=await api('/api/admin/settings/vps-report-interval');iv=d.interval||60;}catch(e){}
+  ct.innerHTML=`<form onsubmit="return saveSettings(event)">
+    <div class="form-group"><label class="form-label">VPS Report Interval (seconds, 10-3600)</label><input type="number" class="form-input" id="vpsInterval" value="${iv}" min="10" max="3600"></div>
+    <div class="form-group"><label class="form-label">New Password</label><div class="d-flex gap-2"><input type="password" class="form-input" id="newPw1" placeholder="new password" minlength="8"><input type="password" class="form-input" id="newPw2" placeholder="confirm" minlength="8"></div></div>
+    <button type="submit" class="btn-primary">save</button>
+  </form>`;
 }
 window.saveSettings = async function(e) {
   e.preventDefault();
-  const interval = parseInt(document.getElementById('vpsInterval').value);
-  const pw1 = document.getElementById('newPassword1').value;
-  const pw2 = document.getElementById('newPassword2').value;
-
   try {
-    if (interval >= 10 && interval <= 3600) {
-      await api('/api/admin/settings/vps-report-interval', { method: 'POST', body: JSON.stringify({ interval }) });
+    const iv=parseInt($('#vpsInterval').value);
+    if(iv>=10&&iv<=3600) await api('/api/admin/settings/vps-report-interval',{method:'POST',body:JSON.stringify({interval:iv})});
+    const p1=$('#newPw1').value,p2=$('#newPw2').value;
+    if(p1){
+      if(p1!==p2){toast('danger','Passwords do not match');return false;}
+      const cur=prompt('Current password:');
+      if(!cur)return false;
+      await api('/api/auth/change-password',{method:'POST',body:JSON.stringify({currentPassword:cur,newPassword:p1})});
+      toast('success','Password changed');
     }
-    if (pw1) {
-      if (pw1 !== pw2) { showToast('danger', '两次密码不一致'); return false; }
-      if (pw1.length < 8) { showToast('danger', '密码至少8位'); return false; }
-      const cur = prompt('请输入当前密码:');
-      if (!cur) return false;
-      await api('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword: cur, newPassword: pw1 }) });
-      showToast('success', '密码已修改');
-    }
-    showToast('success', '设置已保存');
-  } catch (e) { showToast('danger', '保存失败: ' + e.message); }
+    toast('success','Settings saved');
+  } catch(e){toast('danger','Failed: '+e.message);}
   return false;
 };
 
-// ========== 初始化 ==========
-document.addEventListener('DOMContentLoaded', async function() {
-  const token = localStorage.getItem('auth_token');
-  if (!token) { window.location.href = '/login.html'; return; }
-
+// ===== Init =====
+document.addEventListener('DOMContentLoaded', async () => {
+  const t = localStorage.getItem('auth_token');
+  if (!t) { window.location.href = '/login.html'; return; }
   try {
-    const status = await api('/api/auth/status');
-    if (!status.authenticated) { window.location.href = '/login.html'; return; }
-  } catch (e) { window.location.href = '/login.html'; return; }
-
-  initTheme();
-  initTabs();
-  loadTab('servers');
+    const s = await api('/api/auth/status');
+    if (!s.authenticated) { window.location.href = '/login.html'; return; }
+  } catch(e) { window.location.href = '/login.html'; return; }
+  initTheme(); initTabs(); loadTab('servers');
 });
