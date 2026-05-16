@@ -1,0 +1,5 @@
+node_modules/
+dist/
+routes.generated.js
+.DS_Store
+*.log

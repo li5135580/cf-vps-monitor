@@ -1,0 +1,14 @@
+{
+  "name": "cf-vps-monitor",
+  "version": "2.0.0",
+  "description": "VPS监控面板 - Cloudflare Worker",
+  "type": "module",
+  "scripts": {
+    "build": "node build.js",
+    "deploy": "npx wrangler deploy"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12",
+    "wrangler": "^4.0.0"
+  }
+}

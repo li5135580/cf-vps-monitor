@@ -871,7 +871,8 @@ get_cpu_usage() {
                     local total=0
 
                     # 计算总CPU时间（user + nice + system + idle + iowait + irq + softirq + steal）
-                    for i in {1..7}; do
+                    # 使用 seq 替代 {1..7} 确保跨shell兼容性（dash/busybox不支持大括号展开）
+                    for i in $(seq 1 7); do
                         if [[ -n "${cpu_times[i]}" && "${cpu_times[i]}" =~ ^[0-9]+$ ]]; then
                             total=$((total + cpu_times[i]))
                         fi
@@ -1002,14 +1003,14 @@ get_memory_usage() {
             if [[ -n "$mem_info" ]]; then
                 total=$(echo "$mem_info" | awk '{print $2}')
 
-                # 尝试获取available列（第7列，现代Linux系统）
+                # 尝试获取available列（free 3.3+版本的第7列）
                 local available=$(echo "$mem_info" | awk '{print $7}' 2>/dev/null || echo "")
-                if [[ "$available" =~ ^[0-9]+$ ]]; then
-                    # 如果有available列，使用它作为真正的可用内存
+                if [[ -n "$available" && "$available" =~ ^[0-9]+$ && "$available" -gt 0 ]]; then
+                    # 有available列，使用真正可用内存
                     free=$available
                     used=$((total - free))
                 else
-                    # 如果没有available列，使用传统方法计算
+                    # 旧版free没有available列，使用传统方法计算 free+buff/cache
                     local mem_free=$(echo "$mem_info" | awk '{print $4}' 2>/dev/null || echo "0")
                     local buff_cache=$(echo "$mem_info" | awk '{print $6}' 2>/dev/null || echo "0")
 
@@ -1160,25 +1161,45 @@ get_disk_usage() {
 
     # 多种方法获取磁盘信息，提高兼容性
     if command_exists df; then
-        # 使用-k参数确保输出单位一致（KB）
-        local disk_info=$(df -k / 2>/dev/null | tail -1)
-        if [[ -n "$disk_info" ]]; then
-            # 从KB转换为GB，使用awk进行更安全的计算
-            total=$(echo "$disk_info" | awk '{printf "%.2f", $2 / 1024 / 1024}' 2>/dev/null || echo "0")
-            used=$(echo "$disk_info" | awk '{printf "%.2f", $3 / 1024 / 1024}' 2>/dev/null || echo "0")
-            free=$(echo "$disk_info" | awk '{printf "%.2f", $4 / 1024 / 1024}' 2>/dev/null || echo "0")
-            usage_percent=$(echo "$disk_info" | awk '{print $5}' | tr -d '%' 2>/dev/null || echo "0")
-
-            # 验证数据有效性
+        # 汇总所有本地物理磁盘分区（排除临时/虚拟/网络文件系统）
+        # 获取所有ext4/xfs/btrfs分区的总量
+        local disk_info=$(df -k -t ext4 -t xfs -t btrfs -t ext3 -t ext2 -t zfs -t ufs 2>/dev/null | tail -n +2)
+        if [[ -z "$disk_info" ]]; then
+            # 如果-t参数不支持（macOS/BSD），回退到只检查根分区
+            disk_info=$(df -k / 2>/dev/null | tail -1)
+            if [[ -n "$disk_info" ]]; then
+                total=$(echo "$disk_info" | awk '{printf "%.2f", $2 / 1024 / 1024}')
+                used=$(echo "$disk_info" | awk '{printf "%.2f", $3 / 1024 / 1024}')
+                free=$(echo "$disk_info" | awk '{printf "%.2f", $4 / 1024 / 1024}')
+                usage_percent=$(echo "$disk_info" | awk '{print $5}' | tr -d '%')
+            fi
+        else
+            # 汇总所有物理分区
+            total=0; used=0; free=0
+            while IFS= read -r line; do
+                local part_total=$(echo "$line" | awk '{print $2}')
+                local part_used=$(echo "$line" | awk '{print $3}')
+                local part_free=$(echo "$line" | awk '{print $4}')
+                if [[ "$part_total" =~ ^[0-9]+$ && "$part_used" =~ ^[0-9]+$ && "$part_free" =~ ^[0-9]+$ ]]; then
+                    total=$((total + part_total))
+                    used=$((used + part_used))
+                    free=$((free + part_free))
+                fi
+            done <<< "$disk_info"
+            # 转换为GB
+            total=$(awk "BEGIN {printf \"%.2f\", $total / 1024 / 1024}")
+            used=$(awk "BEGIN {printf \"%.2f\", $used / 1024 / 1024}")
+            free=$(awk "BEGIN {printf \"%.2f\", $free / 1024 / 1024}")
+            if [[ $total != "0" && $total != "0.00" ]]; then
+                usage_percent=$(awk "BEGIN {printf \"%.0f\", ($used / $total) * 100}")
+            else
+                usage_percent="0"
+            fi
+            # 安全验证
             total=$(sanitize_number "$total" "0")
             used=$(sanitize_number "$used" "0")
             free=$(sanitize_number "$free" "0")
             usage_percent=$(sanitize_integer "$usage_percent" "0")
-        else
-            total="0"
-            used="0"
-            free="0"
-            usage_percent="0"
         fi
     else
         # 如果df不可用，尝试其他方法
